@@ -1,0 +1,11 @@
+[Unit]
+Description=Autologging service
+
+[Service]
+Type=simple
+User=autologger
+Group=autologger
+ExecStart=/home/autologger/run_autologger.sh
+
+[Install]
+WantedBy=multi-user.target
