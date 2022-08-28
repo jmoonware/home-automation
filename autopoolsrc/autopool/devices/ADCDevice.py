@@ -7,6 +7,8 @@ class SimADS1115():
 	def __init__(self,settings=None):
 		self.logger=logging.getLogger(__name__)
 		self.addr=0x48
+		self.pos=0
+		self.gain=1
 		if settings:
 			if 'addr' in settings.keys():
 				self.addr=settings['addr']

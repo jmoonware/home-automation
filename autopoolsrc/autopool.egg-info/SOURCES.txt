@@ -1,5 +1,4 @@
 setup.py
-autopool/__init__.py
 autopool/app.py
 autopool.egg-info/PKG-INFO
 autopool.egg-info/SOURCES.txt

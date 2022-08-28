@@ -107,7 +107,7 @@ class Controller(Worker):
 		except Exception as ex:
 			self._exception_handler(ex,"In Controller:")
 		self.exception_count+=self.total_running_exceptions
-		if self.exception_count >= self.max_exception_count:
+		if self.max_exception_count > 0 and self.exception_count >= self.max_exception_count:
 			self.logger.error("Max exception count reached - goodbye")
 			self.done=True
 	def Exit(self):

@@ -2,7 +2,7 @@ Metadata-Version: 1.1
 Name: autopool
 Version: 0.1.0
 Summary: Automation for a Pentair pool pump and other devices for RPi
-Home-page: https://github.com/jmoonware/autopool
+Home-page: https://github.com/jmoonware/home-automation
 Author: John A. Moon
 Author-email: jmpixelarium@gmail.com
 License: GNU AGPL

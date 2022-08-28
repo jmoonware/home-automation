@@ -15,6 +15,8 @@ class Device():
 		self.settings=settings
 		self.logger=logging.getLogger(__name__)
 		self.eh=ExceptionHandler(__name__)
+		# use this in calls to protect against multiple threads
+		self.sync=threading.Lock()
 		try:
 			self.Init()
 		except Exception as ex:

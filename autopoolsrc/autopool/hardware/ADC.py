@@ -166,7 +166,11 @@ class ADS1115():
 			v=smb.read_word_data(self.addr,P_CONFIGURATION)
 			return(v)
 	def _2C_to_int(self,x):
-		return(int(x-(x&0x8000)))
+		if x&0x8000: # negative
+			ret= -int((x-1)^0xFFFF)
+		else:
+			ret=int(x)
+		return(ret)
 	def _swap_endian(self,x):
 		LSB=x>>8
 		MSB=x<<8
@@ -206,7 +210,7 @@ class ADS1115():
 		else: # FIXME
 			retval+=CR_PGA_1<<CR_PGA
 		# set mode (continuous or single-shot)
-		retval+=(CR_MODE_SINGLE<<CR_MODE)
+		retval+=(mode<<CR_MODE)
 		# set data rate - currently ignored
 		retval+=(CR_DR_1<<CR_DR)
 		# set comparator mode
