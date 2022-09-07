@@ -45,7 +45,7 @@ def SetupCallbacks(app):
 		vmph_max='N/A'
 		nicedt_vmph_max='N/A'
 		t,s = data.theDataReader.GetCacheStats('wind_vmph',oldest_hour=24)
-		if len(s['max']) > 0:
+		if len(s) > 0 and len(s['max']) > 0:
 			max_idx=np.argmax(s['max'])
 			vmph_tmax=s['maxtime'][max_idx]
 			nicedt_vmph_max='  '+'-'.join(dt.utcfromtimestamp(vmph_tmax).replace(tzinfo=pytz.UTC).astimezone(tz=pytz.timezone('US/Pacific')).isoformat(' ','minutes').split('-')[1:3])
@@ -56,7 +56,7 @@ def SetupCallbacks(app):
 		vmph_max_record='N/A'
 		nicedt_vmph_record='N/A'
 		t,s = data.theDataReader.GetCacheStats('wind_vmph',oldest_hour=24*3650,hourly=False)
-		if len(s['max']) > 0:
+		if len(s) > 0 and len(s['max']) > 0:
 			max_idx=np.argmax(s['max'])
 			vmph_tmax=s['maxtime'][max_idx]
 			nicedt_vmph_record='  '+'-'.join(dt.utcfromtimestamp(vmph_tmax).replace(tzinfo=pytz.UTC).astimezone(tz=pytz.timezone('US/Pacific')).isoformat(' ','minutes').split('-')[0:3])
@@ -75,7 +75,7 @@ def SetupCallbacks(app):
 
 		t,s = data.theDataReader.GetCacheStats('wind_angle',oldest_hour=24)
 		dir_med_24='N/A'
-		if len(s['p50']) > 0:
+		if len(s) > 0 and len(s['p50']) > 0:
 			deg_med_24=np.median(s['p50'])
 			dir_med_24='{0} ({1:.1f})'.format(sector_text[np.argmin(abs(sector_start-deg_med_24))],deg_med_24)
 
@@ -295,12 +295,14 @@ def SetupCallbacks(app):
 			elif granularity=='hourly':
 				# start_time_utc=None,newest_hour=0,oldest_hour=24,hourly=True
 				times,rd = data.theDataReader.GetCacheStats(ycol,start_time_utc=utc_start_datetime,oldest_hour=hours,hourly=True)
-				readings = rd['p50']
+				if 'p50' in rd:
+					readings = rd['p50']
 				the_stats.append({'x':times,'y':rd})
 			elif granularity=='daily':
 				# start_time_utc=None,newest_hour=0,oldest_hour=24,hourly=True
 				times,rd = data.theDataReader.GetCacheStats(ycol,start_time_utc=utc_start_datetime,oldest_hour=hours,hourly=False)
-				readings = rd['p50']
+				if 'p50' in rd:
+					readings = rd['p50']
 				the_stats.append({'x':times,'y':rd})
 			the_plots.append({'x':times,'y':readings})
 			the_labels.append(ycol)
@@ -314,9 +316,11 @@ def SetupCallbacks(app):
 		else:
 			# add empty traces
 			for s,n in zip(the_stats,the_labels):
-				fig.add_trace(go.Box(y=[[v] for v in s['y']['p50']],x=s['x'],boxpoints=False,name=n))
+				if 'p50' in s['y']:
+					fig.add_trace(go.Box(y=[[v] for v in s['y']['p50']],x=s['x'],boxpoints=False,name=n))
 			# now update pre-computed quartiles
-				fig.update_traces(q1=s['y']['p25'], median=s['y']['p50'],
+				if 'p25' in s['y'] and 'p50' in s['y'] and 'p75' in s['y'] and 'min' in s['y'] and 'max' in s['y'] and 'mean' in s['y'] and 'std' in s['y']:
+					fig.update_traces(q1=s['y']['p25'], median=s['y']['p50'],
 								  q3=s['y']['p75'], lowerfence=s['y']['min'],
 								  upperfence=s['y']['max'], mean=s['y']['mean'],
 								  sd=s['y']['std'],selector=dict(name=n))

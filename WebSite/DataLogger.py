@@ -245,7 +245,7 @@ class DataReader(Worker):
 	def GetCacheStats(self,origin,start_time_utc=None,newest_hour=0,oldest_hour=24,hourly=True):
 		with self.stats_sync:
 			if origin==None:
-				self.logger.debug("Get Data: origin is none")
+				self.logger.debug("GetCacheStats: origin is none")
 				return [],{}
 			stats={}
 			t=[]
@@ -256,7 +256,9 @@ class DataReader(Worker):
 			if origin in self.stats_cache:
 				if start_time_utc==None: # get today's date
 					start_time_utc=dt.now(pytz.utc).replace(tzinfo=pytz.UTC)
-
+			else:
+				self.logger.debug("GetCacheStats: origin not in cache")
+				return [],{}
 			# closest hour
 			start_hour_dt=dt(start_time_utc.year,start_time_utc.month,start_time_utc.day,start_time_utc.hour).replace(tzinfo=pytz.UTC)
 			
