@@ -361,7 +361,11 @@ def SetupCallbacks(app):
 		for k in keys:
 			if k in s:
 				if "_T" in label: # convention for temperatures in C
-					s[k]=(9.*s[k]/5.)+32 # convert to F
+					if k=='std': # KLUDGE for stdev values
+						offset=0
+					else:
+						offset=32
+					s[k]=[(9.*v/5.)+offset for v in s[k]] # convert to F
 			else:
 				s[k]=[]
 		return s
