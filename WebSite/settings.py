@@ -1,2 +1,2 @@
-data_root=r'dataFeb19'
+data_root=r'data'
 log_path=r'test_log.txt'

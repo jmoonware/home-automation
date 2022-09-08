@@ -312,15 +312,14 @@ def SetupCallbacks(app):
 
 		if granularity=='points':
 			for d,l in zip(the_plots,the_labels):
-				fig.add_trace(go.Scatter(x=d['x'],y=d['y'],mode='lines',name=l))
+				fig.add_trace(go.Scatter(x=d['x'],y=convert_points(d['y'],l),mode='lines',name=l))
 		else:
 			# add empty traces
 			for s,n in zip(the_stats,the_labels):
-				if 'p50' in s['y']:
-					fig.add_trace(go.Box(y=[[v] for v in s['y']['p50']],x=s['x'],boxpoints=False,name=n))
-			# now update pre-computed quartiles
-				if 'p25' in s['y'] and 'p50' in s['y'] and 'p75' in s['y'] and 'min' in s['y'] and 'max' in s['y'] and 'mean' in s['y'] and 'std' in s['y']:
-					fig.update_traces(q1=s['y']['p25'], median=s['y']['p50'],
+				s['y']=convert_stats(s['y'],n)
+				fig.add_trace(go.Box(y=[[v] for v in s['y']['p50']],x=s['x'],boxpoints=False,name=n))
+				# now update pre-computed quartiles
+				fig.update_traces(q1=s['y']['p25'], median=s['y']['p50'],
 								  q3=s['y']['p75'], lowerfence=s['y']['min'],
 								  upperfence=s['y']['max'], mean=s['y']['mean'],
 								  sd=s['y']['std'],selector=dict(name=n))
@@ -356,3 +355,19 @@ def SetupCallbacks(app):
 		if n:
 			return not is_open
 		return is_open
+		
+	def convert_stats(s,label):
+		keys=['min','max','p25','p50','p75','mean','std'] # keys to convert
+		for k in keys:
+			if k in s:
+				if "_T" in label: # convention for temperatures in C
+					s[k]=(9.*s[k]/5.)+32 # convert to F
+			else:
+				s[k]=[]
+		return s
+					
+	def convert_points(d,label):
+		if "_T" in label: # convention for temperatures in C
+			return((9.*d/5.)+32) # convert to F
+		else:
+			return(d)
