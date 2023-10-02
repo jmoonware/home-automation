@@ -105,7 +105,7 @@ class DataWriter(Worker):
 					url=self.data_url+"/"+origin
 					payload={'time':str(ptw[0]),'reading':str(ptw[1])}
 					try:
-						requests.get(url,params=payload,timeout=2)
+						requests.get(url,params=payload,timeout=2,headers={"Content-Type":"application/json"})
 					except Exception as ex:
 						self.logger.error("{0} Error data logging to {1}: {2}".format(self,self.data_url,ex))
 

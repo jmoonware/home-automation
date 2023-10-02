@@ -86,6 +86,49 @@ def SetupCallbacks(app):
 
 		return options, vmph_1m,vmph_max,nicedt_vmph_max,vmph_max_record,nicedt_vmph_record,dir_med_1m,dir_med_24
 
+	@app.callback(
+		[
+			Output(component_id='temp-now', component_property='children'),
+			Output(component_id='temp-max-24', component_property='children'),
+			Output(component_id='temp-min-24', component_property='children'),
+			Output(component_id='humidity-now', component_property='children'),
+			Output(component_id='humidity-max-24', component_property='children'),
+			Output(component_id='humidity-min-24', component_property='children'),
+		],
+		Input(component_id=vc.theInterval.id, component_property=vc.theInterval.n_intervals)
+	)
+	def update_gauges(*args):
+		
+		current_temp = np.random.rand()*60
+		current_humidity = np.random.rand()*100
+
+		newvals=data.theDataReader.GetLatestReadings()
+		if 'outside_T' in newvals:
+			current_temp=(9*newvals['outside_T']['reading']/5.)+32
+
+		if 'outside_H' in newvals:
+			current_humidity=newvals['outside_H']['reading']
+
+		# last 24 hrs
+		max_temp='N/A'
+		min_temp='N/A'
+		t,s = data.theDataReader.GetCacheStats('outside_T',oldest_hour=24)
+		if len(s) > 0 and len(s['max']) > 0:
+			max_temp="{0:.1f}".format(9*np.max(s['max'])/5. + 32)
+		if len(s) > 0 and len(s['min']) > 0:
+			min_temp="{0:.1f}".format(9*np.min(s['min'])/5. + 32)
+
+		# last 24 hrs
+		max_humidity='N/A'
+		min_humidity='N/A'
+		t,s = data.theDataReader.GetCacheStats('outside_H',oldest_hour=24)
+		if len(s) > 0 and len(s['max']) > 0:
+			max_humidity="{0:.1f}".format(np.max(s['max']))
+		if len(s) > 0 and len(s['min']) > 0:
+			min_humidity="{0:.1f}".format(np.min(s['min']))
+
+
+		return current_temp, max_temp, min_temp, current_humidity, max_humidity, min_humidity
 
 	@app.callback(
 		[

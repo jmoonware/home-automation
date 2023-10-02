@@ -122,7 +122,7 @@ class DataWriter(Command):
 
 				
 # utility class to read data back into memory from disk
-class DataReader(Worker):
+class DataReader(Command):
 	def Init(self):
 		self.loop_count=-1
 		self.blocking=False
@@ -141,7 +141,7 @@ class DataReader(Worker):
 		self.file_size_sync=threading.Lock() # need to lock top-level value,cache dicts while modifying with new origins
 
 	def Execute(self):
-		# this is where data gets logged periodically
+		# this is where data gets read/updated periodically
 		# since this could be in a completely separate process, made this process aware, which is where the 
 		# complexity arises in the data reader
 		# first, make sure directories are there (in correct time zone!)
@@ -309,7 +309,7 @@ class DataReader(Worker):
 			if in_cache: # just return current cache contents - for debugging
 				return(t,r)
 			# this succeeds if we happen to be looking at the latest data put in by Rebuild and Update
-			if oldest_ts>=t[0] and (newest_hour<=0 or newest_ts <= t[-1]): # we have all the data in cache
+			if len(t) > 0 and oldest_ts>=t[0] and (newest_hour<=0 or newest_ts <= t[-1]): # we have all the data in cache
 #				logging.getLogger(__name__).debug("{0} Get data (cache)".format(self))
 				return(t[(t>=oldest_ts)*(t<=newest_ts)],r[(t>=oldest_ts)*(t<=newest_ts)])
 
@@ -322,7 +322,7 @@ class DataReader(Worker):
 			r=np.array(data_dict[origin]['reading'])
 			if len(t)==0:
 				self.logger.debug("{0} Zero length data for {1}".format(self,origin))
-			elif oldest_ts >=t[0] and (newest_hour <= 0 or newest_ts <= t[-1]): # we have all the data from file
+			elif len(t) > 0 and (oldest_ts >=t[0] and (newest_hour <= 0 or newest_ts <= t[-1])): # we have all the data from file
 				logging.getLogger(__name__).debug("{0} Get data latest (file)".format(self))
 				return(t[(t>=oldest_ts)*(t<=newest_ts)],r[(t>=oldest_ts)*(t<=newest_ts)])
 		# just return whatever we have

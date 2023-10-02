@@ -1,0 +1,17 @@
+[project]
+name = "autopool"
+version = "0.1.0"
+dependencies = [
+    "numpy",
+]
+requires-python = ">3.9"
+authors = [
+    {name = "John A. Moon"},
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages]
+find = {}

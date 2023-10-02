@@ -1,4 +1,4 @@
-Metadata-Version: 1.1
+Metadata-Version: 2.1
 Name: autopool
 Version: 0.1.0
 Summary: Automation for a Pentair pool pump and other devices for RPi
@@ -6,9 +6,11 @@ Home-page: https://github.com/jmoonware/home-automation
 Author: John A. Moon
 Author-email: jmpixelarium@gmail.com
 License: GNU AGPL
-Description: Automation for a Pentair pool pump and other devices for RPi
-Platform: UNKNOWN
 Classifier: License :: OSI Approved :: GNU Affero GPL
 Classifier: Programming Language :: Python
 Classifier: Programming Language :: Python :: 3
 Classifier: Programming Language :: Python :: 3.7
+Requires-Python: >3.9
+Requires-Dist: numpy
+
+Automation for a Pentair pool pump and other devices for RPi

@@ -9,6 +9,8 @@ def abort_if_sensor_doesnt_exist(sensor_id):
     if sensor_id not in data.LatestSensorData:
         abort(404, message="sensor {} doesn't exist".format(sensor_id))
 
+# apparently reqparse is deprecated
+# make sure to use Flask/Werzeug 2.0.2 or earlier! v. 2.2.2 breaks this interface!
 parser = reqparse.RequestParser()
 parser.add_argument('time')
 parser.add_argument('reading')
@@ -28,6 +30,7 @@ class Sensor(Resource):
 	def get(self, sensor_id):
 		args = parser.parse_args()
 		new_reading = None
+
 		if args['time'] and args['reading']:
 			try:
 				float_read=float(args['reading'])
@@ -45,7 +48,7 @@ class Sensor(Resource):
 # shows a list of all sensor data
 class SensorList(Resource):
 	def get(self):
-		return data.theDataReader.GetLatestData()
+		return data.theDataReader.GetLatestReadings()
 
 ##
 ## Actually setup the Api resource routing here
