@@ -11,10 +11,10 @@ import time
 import os
 import numpy as np
 import RPi.GPIO as GPIO
+import data_url
 
 autopool.app.start_logging(level=logging.DEBUG,filename='nwindlog.txt')
-#url='http://ec2-13-59-78-131.us-east-2.compute.amazonaws.com:8084/sensors'
-url='http://ec2-18-188-87-22.us-east-2.compute.amazonaws.com:8084/sensors'
+url=data_url.url
 
 # here are some origin,data pairs
 

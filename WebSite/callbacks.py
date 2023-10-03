@@ -14,6 +14,7 @@ from datetime import date
 from datetime import datetime as dt
 import pytz
 import numpy as np
+import requests
 
 def SetupCallbacks(app):
 	""" params: dash app) """
@@ -88,26 +89,69 @@ def SetupCallbacks(app):
 
 	@app.callback(
 		[
+			Output(component_id='forecast', component_property='children'),
+			Output(component_id='forecast-1', component_property='children'),
+		],
+		Input(component_id=vc.theForecastInterval.id, component_property=vc.theForecastInterval.n_intervals)
+	)
+	def update_forecast(*args):
+		forecast_string = 'None'
+		forecast_string_1 = 'None'
+		
+		# Get the forecast string from National Weather Service
+		forecast_url = r'https://forecast.weather.gov/MapClick.php?lon=-117.16695785522462&lat=33.04002531855252'
+		r = None
+		forecast_strings = []
+		try:
+			with requests.Session() as req:
+				r = req.get(forecast_url)
+			if r:
+				lines=r.text.split('\n')
+				for l,nl in zip(lines[:-1],lines[1:]):
+					if 'period-name' in l:
+						forecast_strings.append(nl.split('title=')[1].split('class')[0])
+		except Exception as ex:
+			pass
+
+		if len(forecast_strings) > 1:
+			forecast_string = forecast_strings[0]
+			forecast_string_1 = forecast_strings[1]
+
+		return forecast_string, forecast_string_1
+
+
+
+
+
+	@app.callback(
+		[
 			Output(component_id='temp-now', component_property='children'),
 			Output(component_id='temp-max-24', component_property='children'),
 			Output(component_id='temp-min-24', component_property='children'),
 			Output(component_id='humidity-now', component_property='children'),
 			Output(component_id='humidity-max-24', component_property='children'),
 			Output(component_id='humidity-min-24', component_property='children'),
+			Output(component_id='precip-1hr', component_property='children'),
+			Output(component_id='precip-24hr', component_property='children'),
+			Output(component_id='precip-ytd', component_property='children'),
 		],
 		Input(component_id=vc.theInterval.id, component_property=vc.theInterval.n_intervals)
 	)
 	def update_gauges(*args):
 		
-		current_temp = np.random.rand()*60
-		current_humidity = np.random.rand()*100
+		current_temp = "{0:.1f}".format(np.random.rand()*60)
+		current_humidity = "{0:.1f}".format(np.random.rand()*100)
+		precip_1hr = "{0:.1f}".format(np.random.rand()*10)
 
 		newvals=data.theDataReader.GetLatestReadings()
 		if 'outside_T' in newvals:
-			current_temp=(9*newvals['outside_T']['reading']/5.)+32
+			current_temp="{0:.1f}".format((9*newvals['outside_T']['reading']/5.)+32)
 
 		if 'outside_H' in newvals:
-			current_humidity=newvals['outside_H']['reading']
+			current_humidity="{0:.1f}".format(newvals['outside_H']['reading'])
+
+		if 'precip_inphr' in newvals:
+			precip_1hr="{0:.1f}".format(newvals['precip_inphr']['reading'])
 
 		# last 24 hrs
 		max_temp='N/A'
@@ -128,7 +172,15 @@ def SetupCallbacks(app):
 			min_humidity="{0:.1f}".format(np.min(s['min']))
 
 
-		return current_temp, max_temp, min_temp, current_humidity, max_humidity, min_humidity
+		precip_24hr = 'N/A'
+		t,readings = data.theDataReader.GetCacheData('precip_inphr',oldest_hour=24)
+		if len(readings) > 0:
+			precip_24hr = "{0:.1f}".format(np.sum(readings))
+		precip_ytd = 'N/A'
+
+	
+
+		return current_temp, max_temp, min_temp, current_humidity, max_humidity, min_humidity, precip_1hr, precip_24hr, precip_ytd
 
 	@app.callback(
 		[

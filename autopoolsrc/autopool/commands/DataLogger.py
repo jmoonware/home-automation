@@ -220,7 +220,7 @@ class DataReader(Command):
 			for origin in self.data_cache:
 				if 'time' in self.data_cache[origin] and len(self.data_cache[origin])>0:
 					ret[origin]={'time':self.data_cache[origin]['time'][-1],'reading':self.data_cache[origin]['reading'][-1]}
-		elif origin in self.data_cache:
+		elif origin in self.data_cache and len(self.data_cache[origin]['time']) > 0:
 			ret[origin]={'time':self.data_cache[origin]['time'][-1],'reading':self.data_cache[origin]['reading'][-1]}
 		return(ret)
 		

@@ -38,7 +38,7 @@ def SetupView(controller,dr):
 								dbc.CardBody(
 									[
 										html.H3("Temperature (F)", className="text-primary"), # 
-										dbc.ListGroupItem(html.H1("N/A",id='temp-now',className='text-primary'),style={'textAlign': 'center','verticalAlign':'middle'}),
+										dbc.ListGroupItem(html.H1("N/A",id='temp-now',className='text-info'),style={'textAlign': 'center','verticalAlign':'middle'}),
 										dbc.Table(html.Tbody([
 										html.Tr([
 											html.Td(html.H5("Temperature Max (24 hrs)"),style={'textAlign': 'center','verticalAlign':'middle'}),
@@ -69,7 +69,7 @@ def SetupView(controller,dr):
 								dbc.CardBody(
 									[
 										html.H3("Humidity (%)", className="text-primary"),
-										dbc.ListGroupItem(html.H1("N/A",id='humidity-now',className='text-primary'),style={'textAlign': 'center','verticalAlign':'middle'}),
+										dbc.ListGroupItem(html.H1("N/A",id='humidity-now',className='text-info'),style={'textAlign': 'center','verticalAlign':'middle'}),
 										dbc.Table(html.Tbody([
 										html.Tr([
 											html.Td(html.H5("Humidity Max (24 hrs)"),style={'textAlign': 'center','verticalAlign':'middle'}),
@@ -106,7 +106,7 @@ def SetupView(controller,dr):
 										]),
 										html.Tr([												
 											html.Td(html.H5("Last 24 hrs"),style={'textAlign': 'center','verticalAlign':'middle'}),
-											html.Td(html.H5("N/A",id='precip-24',className="text-primary"),style={'textAlign': 'center','verticalAlign':'middle'}),
+											html.Td(html.H5("N/A",id='precip-24hr',className="text-primary"),style={'textAlign': 'center','verticalAlign':'middle'}),
 										]),
 										html.Tr([
 											html.Td(html.H5("YTD"),style={'textAlign': 'center','verticalAlign':'middle'}),
@@ -124,6 +124,33 @@ def SetupView(controller,dr):
 					lg=5,
 					xl=5,
 				),
+				dbc.Col(
+					[
+						dbc.Card(
+							[
+								dbc.CardBody(
+									[
+										html.H3("Forecast", className="text-primary"),
+										dbc.Table(html.Tbody([
+										html.Tr([
+											html.Td(html.H5("N/A",id='forecast',className="text-body"),style={'textAlign': 'left','verticalAlign':'middle'}),
+										]),
+										html.Tr([
+											html.Td(html.H5("N/A",id='forecast-1',className="text-body"),style={'textAlign': 'left','verticalAlign':'middle'}),
+										]),
+										])),
+									]
+								),
+							],
+						),
+					],
+					xs=11,
+					sm=11,
+					md=5,
+					lg=5,
+					xl=5,
+				),
+
 			],
 			justify='center',
 		)
@@ -358,6 +385,15 @@ def SetupView(controller,dr):
 			)
 		)
 	)
+
+	lo.append(
+		dbc.Row(
+			dbc.Col(
+				dcc.Interval(interval=vc.theForecastInterval.interval,id=vc.theForecastInterval.id,n_intervals=0)
+			)
+		)
+	)
+
 
 	
 	
