@@ -1,5 +1,6 @@
 
 from flask_restful import reqparse, abort, Api, Resource
+from flask import jsonify
 import data
 import logging
 
@@ -48,7 +49,10 @@ class Sensor(Resource):
 # shows a list of all sensor data
 class SensorList(Resource):
 	def get(self):
-		return data.theDataReader.GetLatestReadings()
+		return jsonify(
+			data.theDataReader.GetLatestReadings() |
+			data.theDataReader.ephemera
+		)
 
 ##
 ## Actually setup the Api resource routing here

@@ -24,12 +24,10 @@ import threading
 # e.g.
 # http://ec2.xxx/sensors/wind_angle?time=23948&reading=23.5
 # 
-# using requests.get(url+"/wind_angle",{'time':23948,'reading':23.5})
-# will work
-#
 
 data_sep="\t"
 data_ext=".dat"
+report_timezone="US/Pacific"
 
 #
 # max_data_cache is the number of ~16 byte (2 Python floats) held in memory for each
@@ -81,21 +79,21 @@ class DataWriter(Worker):
 		# this is where data gets logged periodically
 		# since this could be in a completely separate process, made this process aware, which is where the 
 		# complexity arises in the data reader
-		# first, make sure directories are there (in correct time zone!)
-		now=dt.now(pytz.utc)
-		dpath=os.path.dirname(file_for_date(self.data_root,now,"temp"))
-		if not os.path.isdir(dpath): # small chance some other proc is making these as we check...
-			os.makedirs(dpath,exist_ok=True)
-			
+		# note that since every new data timestamp might change the directory boundary, have to check each and every time
+		# we log a new timestamp, reading pair			
 		for origin in self.safe_dict(self.data_values):
-			data_path=file_for_date(self.data_root,now,origin)
 			pairs_for_url=[]
 			if len(self.data_values[origin]) > 0:
-				self.logger.debug("{0} Writing {1} data pairs to {2}".format(self,len(self.data_values[origin]),data_path))
-				with portalocker.Lock(data_path,'a+b',timeout=5) as f:
-					while len(self.data_values[origin]) > 0:
-						pair_to_write=self.data_values[origin].popleft()
-						fmt="{0:.3f}"+data_sep+"{1:."+str(pair_to_write[2])+"e}\n"
+				data_path=file_for_date(self.data_root,dt.utcfromtimestamp(self.data_values[origin][0][0]),origin)
+				self.logger.debug("{0} Writing {1} data pairs to (initially) {2}".format(self,len(self.data_values[origin]),data_path))
+				while len(self.data_values[origin]) > 0:
+					pair_to_write=self.data_values[origin].popleft()
+					fmt="{0:.3f}"+data_sep+"{1:."+str(pair_to_write[2])+"e}\n"
+					data_path=file_for_date(self.data_root,dt.utcfromtimestamp(pair_to_write[0]),origin)
+					dpath=os.path.dirname(data_path)
+					if not os.path.isdir(dpath): # small chance some other proc is making these as we check...
+						os.makedirs(dpath,exist_ok=True)
+					with portalocker.Lock(data_path,'a+b',timeout=5) as f:
 						f.write(fmt.format(pair_to_write[0],pair_to_write[1]).encode('utf-8'))
 						pairs_for_url.append(pair_to_write)
 			# try to upload
@@ -105,7 +103,7 @@ class DataWriter(Worker):
 					url=self.data_url+"/"+origin
 					payload={'time':str(ptw[0]),'reading':str(ptw[1])}
 					try:
-						requests.get(url,params=payload,timeout=2,headers={"Content-Type":"application/json"})
+						requests.get(url,params=payload,timeout=2)
 					except Exception as ex:
 						self.logger.error("{0} Error data logging to {1}: {2}".format(self,self.data_url,ex))
 
@@ -131,6 +129,7 @@ class DataReader(Worker):
 		self.dates={}
 		self.filenames={} # by origin, then by sorted date
 		self.data_cache={} # recent values held in memory
+		self.ephemera={} # general purpose transient values
 		self.stats_cache={}
 		self.today_filesize={} # file size for this day at last write, by origin
 		self.stats_interval=60 # FIXME about every minute
@@ -233,7 +232,7 @@ class DataReader(Worker):
 		t,r=self.GetTimestampUTCData(origin,newest_hour=newest_hour,oldest_hour=oldest_hour,in_cache=in_cache)
 		# convert t to iso format strings in PTZ for graphing
 		# TODO: optimize this monstrosity
-		t_iso=[dt.utcfromtimestamp(ti).replace(tzinfo=pytz.UTC).astimezone(tz=pytz.timezone('US/Pacific')).isoformat() for ti in t]
+		t_iso=[dt.utcfromtimestamp(ti).replace(tzinfo=pytz.UTC).astimezone(tz=pytz.timezone(report_timezone)).isoformat() for ti in t]
 		return t_iso,r
 
 	# Returns cached summary stats for an origin
@@ -293,7 +292,7 @@ class DataReader(Worker):
 									
 				
 		# TODO: optimize this monstrosity
-		t_iso=[dt.utcfromtimestamp(ti).replace(tzinfo=pytz.UTC).astimezone(tz=pytz.timezone('US/Pacific')).isoformat() for ti in t]
+		t_iso=[dt.utcfromtimestamp(ti).replace(tzinfo=pytz.UTC).astimezone(tz=pytz.timezone(report_timezone)).isoformat() for ti in t]
 		
 		return t_iso,stats
 		

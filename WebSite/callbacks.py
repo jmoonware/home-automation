@@ -15,6 +15,7 @@ from datetime import datetime as dt
 import pytz
 import numpy as np
 import requests
+import time
 
 def SetupCallbacks(app):
 	""" params: dash app) """
@@ -109,18 +110,82 @@ def SetupCallbacks(app):
 				lines=r.text.split('\n')
 				for l,nl in zip(lines[:-1],lines[1:]):
 					if 'period-name' in l:
-						forecast_strings.append(nl.split('title=')[1].split('class')[0])
+						fs = nl.split('title=')[1].split('class')[0].strip().replace('"','')
+						if len(fs) > 0:
+							forecast_strings.append(fs)
 		except Exception as ex:
 			pass
 
 		if len(forecast_strings) > 1:
 			forecast_string = forecast_strings[0]
 			forecast_string_1 = forecast_strings[1]
+			data.theDataReader.ephemera['Forecast0']=forecast_string
+			data.theDataReader.ephemera['Forecast1']=forecast_string_1
 
 		return forecast_string, forecast_string_1
 
+	@app.callback(
+		[
+			Output(component_id='precip-ytd', component_property='children'),
+		],
+		Input(component_id=vc.theDailyPrecipInterval.id, component_property=vc.theDailyPrecipInterval.n_intervals)
+	)
+	def update_dailyprecip(*args):
 
+		precip_ytd_string = 'None'
+		
+		print("*** BLARG")
+		# Get the daily precip data and check to see if we have any updates
 
+		earliest_year = 2022
+		latest_year = dt.now().year
+
+		# this should load all the data we have
+		data_name = 'dailyprecip_in'
+		times, readings = data.theDataReader.GetTimestampUTCData(data_name,oldest_hour=24*366*(1+(latest_year-earliest_year)))
+		ts_latest_yr = dt(year=latest_year,month=1,day=1).astimezone(pytz.UTC).timestamp()
+		
+		if len(times)==0 or dt.now(pytz.utc).timestamp()-np.max(times) > 24*3600: 
+			dates=[]
+			daily_total_precip = []
+			precip_url = r'https://www.wrh.noaa.gov/sgx/obs/rtp/rtp_SGX_{0:02d}'
+			for yr in range(earliest_year,latest_year+1):
+				r = None
+				try:
+					with requests.Session() as req:
+						r = req.get(precip_url.format(yr-2000))
+					if r:
+						lines=r.text.split('\n')
+						for l in lines:
+							toks=l.split()
+							if len(toks) > 2:
+								dates.append(dt.strptime(toks[0],'%m/%d/%y').astimezone(pytz.UTC).timestamp())
+								try:
+									daily_total_precip.append(float(toks[-2].replace('T','0.001')))
+								except:
+									daily_total_precip.append(0.0)									
+				except Exception as ex:
+					pass
+
+			# if we don't have a record of the lasted downloaded readings, log them now
+			rebuild = False
+			for d, p in zip(dates,daily_total_precip):
+				if not d in times:
+					data.theDataWriter.LogData(data_name,p,timestamp=d)
+					rebuild = True
+			if rebuild:
+				time.sleep(5) # wait for some data logging to happen
+				data.theDataReader.RebuildCache()
+			
+			# use the ones we just downloaded
+			times = np.array(dates)
+			readings = np.array(daily_total_precip)
+
+		total_precip = np.sum(readings[times >= ts_latest_yr])
+
+		precip_ytd_string = "{0:.2f} in".format(total_precip)
+
+		return precip_ytd_string,
 
 
 	@app.callback(
@@ -133,7 +198,7 @@ def SetupCallbacks(app):
 			Output(component_id='humidity-min-24', component_property='children'),
 			Output(component_id='precip-1hr', component_property='children'),
 			Output(component_id='precip-24hr', component_property='children'),
-			Output(component_id='precip-ytd', component_property='children'),
+#			Output(component_id='precip-ytd', component_property='children'),
 		],
 		Input(component_id=vc.theInterval.id, component_property=vc.theInterval.n_intervals)
 	)
@@ -176,11 +241,11 @@ def SetupCallbacks(app):
 		t,readings = data.theDataReader.GetCacheData('precip_inphr',oldest_hour=24)
 		if len(readings) > 0:
 			precip_24hr = "{0:.1f}".format(np.sum(readings))
-		precip_ytd = 'N/A'
+		# precip_ytd = 'N/A'
 
 	
 
-		return current_temp, max_temp, min_temp, current_humidity, max_humidity, min_humidity, precip_1hr, precip_24hr, precip_ytd
+		return current_temp, max_temp, min_temp, current_humidity, max_humidity, min_humidity, precip_1hr, precip_24hr, # precip_ytd
 
 	@app.callback(
 		[

@@ -1,3 +1,4 @@
+# from worker import Worker
 from autopool.logic.worker import Worker
 from autopool.logic.command import Command
 import os
@@ -25,12 +26,11 @@ import threading
 # e.g.
 # http://ec2.xxx/sensors/wind_angle?time=23948&reading=23.5
 # 
-# using requests.get(url+"/wind_angle",{'time':23948,'reading':23.5})
-# will work
 #
 
 data_sep="\t"
 data_ext=".dat"
+report_timezone="US/Pacific"
 
 #
 # max_data_cache is the number of ~16 byte (2 Python floats) held in memory for each
@@ -82,21 +82,21 @@ class DataWriter(Command):
 		# this is where data gets logged periodically
 		# since this could be in a completely separate process, made this process aware, which is where the 
 		# complexity arises in the data reader
-		# first, make sure directories are there (in correct time zone!)
-		now=dt.now(pytz.utc)
-		dpath=os.path.dirname(file_for_date(self.data_root,now,"temp"))
-		if not os.path.isdir(dpath): # small chance some other proc is making these as we check...
-			os.makedirs(dpath,exist_ok=True)
-			
+		# note that since every new data timestamp might change the directory boundary, have to check each and every time
+		# we log a new timestamp, reading pair			
 		for origin in self.safe_dict(self.data_values):
-			data_path=file_for_date(self.data_root,now,origin)
 			pairs_for_url=[]
 			if len(self.data_values[origin]) > 0:
-				self.logger.debug("{0} Writing {1} data pairs to {2}".format(self,len(self.data_values[origin]),data_path))
-				with portalocker.Lock(data_path,'a+b',timeout=5) as f:
-					while len(self.data_values[origin]) > 0:
-						pair_to_write=self.data_values[origin].popleft()
-						fmt="{0:.3f}"+data_sep+"{1:."+str(pair_to_write[2])+"e}\n"
+				data_path=file_for_date(self.data_root,dt.utcfromtimestamp(self.data_values[origin][0][0]),origin)
+				self.logger.debug("{0} Writing {1} data pairs to (initially) {2}".format(self,len(self.data_values[origin]),data_path))
+				while len(self.data_values[origin]) > 0:
+					pair_to_write=self.data_values[origin].popleft()
+					fmt="{0:.3f}"+data_sep+"{1:."+str(pair_to_write[2])+"e}\n"
+					data_path=file_for_date(self.data_root,dt.utcfromtimestamp(pair_to_write[0]),origin)
+					dpath=os.path.dirname(data_path)
+					if not os.path.isdir(dpath): # small chance some other proc is making these as we check...
+						os.makedirs(dpath,exist_ok=True)
+					with portalocker.Lock(data_path,'a+b',timeout=5) as f:
 						f.write(fmt.format(pair_to_write[0],pair_to_write[1]).encode('utf-8'))
 						pairs_for_url.append(pair_to_write)
 			# try to upload
@@ -132,6 +132,7 @@ class DataReader(Command):
 		self.dates={}
 		self.filenames={} # by origin, then by sorted date
 		self.data_cache={} # recent values held in memory
+		self.ephemera={} # general purpose transient values
 		self.stats_cache={}
 		self.today_filesize={} # file size for this day at last write, by origin
 		self.stats_interval=60 # FIXME about every minute
@@ -141,7 +142,7 @@ class DataReader(Command):
 		self.file_size_sync=threading.Lock() # need to lock top-level value,cache dicts while modifying with new origins
 
 	def Execute(self):
-		# this is where data gets read/updated periodically
+		# this is where data gets logged periodically
 		# since this could be in a completely separate process, made this process aware, which is where the 
 		# complexity arises in the data reader
 		# first, make sure directories are there (in correct time zone!)
@@ -174,7 +175,7 @@ class DataReader(Command):
 				self.UpdateStats()
 
 	# called once on start-up, although this could be used to reset cache as well
-	# generally don't call this in Init() so that the data logger is running
+	# generally don't call this in Init() so that the logger is running
 	def RebuildCache(self,max_hours=72):
 		# rebuild cache
 
@@ -219,9 +220,13 @@ class DataReader(Command):
 		if not origin: # return for all origins
 			for origin in self.data_cache:
 				if 'time' in self.data_cache[origin] and len(self.data_cache[origin])>0:
-					ret[origin]={'time':self.data_cache[origin]['time'][-1],'reading':self.data_cache[origin]['reading'][-1]}
-		elif origin in self.data_cache and len(self.data_cache[origin]['time']) > 0:
-			ret[origin]={'time':self.data_cache[origin]['time'][-1],'reading':self.data_cache[origin]['reading'][-1]}
+					if len(self.data_cache[origin]['time']) > 0:
+						ret[origin]={'time':self.data_cache[origin]['time'][-1],'reading':self.data_cache[origin]['reading'][-1]}
+		elif origin in self.data_cache:
+			if len(self.data_cache[origin]['time']) > 0:
+				ret[origin]={'time':self.data_cache[origin]['time'][-1],'reading':self.data_cache[origin]['reading'][-1]}
+		else:
+			self.logger.debug("GetLatestReadings: origin {0} not available".format(origin))
 		return(ret)
 		
 	# here is were we get the latest t,r data for plotting in the callbacks		
@@ -232,7 +237,7 @@ class DataReader(Command):
 		t,r=self.GetTimestampUTCData(origin,newest_hour=newest_hour,oldest_hour=oldest_hour,in_cache=in_cache)
 		# convert t to iso format strings in PTZ for graphing
 		# TODO: optimize this monstrosity
-		t_iso=[dt.utcfromtimestamp(ti).replace(tzinfo=pytz.UTC).astimezone(tz=pytz.timezone('US/Pacific')).isoformat() for ti in t]
+		t_iso=[dt.utcfromtimestamp(ti).replace(tzinfo=pytz.UTC).astimezone(tz=pytz.timezone(report_timezone)).isoformat() for ti in t]
 		return t_iso,r
 
 	# Returns cached summary stats for an origin
@@ -244,7 +249,7 @@ class DataReader(Command):
 	def GetCacheStats(self,origin,start_time_utc=None,newest_hour=0,oldest_hour=24,hourly=True):
 		with self.stats_sync:
 			if origin==None:
-				self.logger.debug("Get Data: origin is none")
+				self.logger.debug("GetCacheStats: origin is none")
 				return [],{}
 			stats={}
 			t=[]
@@ -255,32 +260,35 @@ class DataReader(Command):
 			if origin in self.stats_cache:
 				if start_time_utc==None: # get today's date
 					start_time_utc=dt.now(pytz.utc).replace(tzinfo=pytz.UTC)
-
+			else:
+				self.logger.debug("GetCacheStats: origin not in cache")
+				return [],{}
 			# closest hour
-			start_hour=dt(start_time_utc.year,start_time_utc.month,start_time_utc.day,start_time_utc.hour).replace(tzinfo=pytz.UTC)
+			start_hour_dt=dt(start_time_utc.year,start_time_utc.month,start_time_utc.day,start_time_utc.hour).replace(tzinfo=pytz.UTC)
 			
-			end_hour=start_hour-timedelta(hours=oldest_hour)
-			end_date=dt(year=end_hour.year,month=end_hour.month,day=end_hour.day).replace(tzinfo=pytz.UTC)
-			num_days=int(np.ceil((start_hour-end_hour).total_seconds()/(3600*24)))
+			end_hour_dt=start_hour_dt-timedelta(hours=oldest_hour)
+			end_date=dt(year=end_hour_dt.year,month=end_hour_dt.month,day=end_hour_dt.day).replace(tzinfo=pytz.UTC)
+			num_days=int(np.ceil((start_hour_dt-end_hour_dt).total_seconds()/(3600*24)))
 			
 			if hourly:
 				for d in range(num_days): # count oldest to youngest
 					for h in range(24):
 						c_hour=d*24+h
-						c_dt=end_hour+timedelta(hours=c_hour)
+						c_dt=end_hour_dt+timedelta(hours=c_hour)
 						date_index=dt(year=c_dt.year,month=c_dt.month,day=c_dt.day).replace(tzinfo=pytz.UTC).timestamp()
+#						print(c_dt,h)
 						if date_index in self.stats_cache[origin]: # have stats for this date
 							# json deserialize makes this a string
-							if str(h) in self.stats_cache[origin][date_index]['hourly']:
+							if str(c_dt.hour) in self.stats_cache[origin][date_index]['hourly']:
 								t.append(c_dt.timestamp())
 								for k in keys:
-									stats[k].append(self.stats_cache[origin][date_index]['hourly'][str(h)][k])
+									stats[k].append(self.stats_cache[origin][date_index]['hourly'][str(c_dt.hour)][k])
 						if c_hour>=oldest_hour: # counted enough hours
 							break
 
-			else:
+			else: # FIXME: currently boundary aligned to UTC clock, not local time
 				for d in range(num_days):
-					c_dt=end_hour+timedelta(hours=d*24)
+					c_dt=start_hour_dt-timedelta(hours=d*24)
 					date_index=dt(year=c_dt.year,month=c_dt.month,day=c_dt.day).replace(tzinfo=pytz.UTC).timestamp()
 					if date_index in self.stats_cache[origin]: # have stats for this date
 						t.append(date_index)
@@ -289,7 +297,7 @@ class DataReader(Command):
 									
 				
 		# TODO: optimize this monstrosity
-		t_iso=[dt.utcfromtimestamp(ti).replace(tzinfo=pytz.UTC).astimezone(tz=pytz.timezone('US/Pacific')).isoformat() for ti in t]
+		t_iso=[dt.utcfromtimestamp(ti).replace(tzinfo=pytz.UTC).astimezone(tz=pytz.timezone(report_timezone)).isoformat() for ti in t]
 		
 		return t_iso,stats
 		
@@ -322,11 +330,15 @@ class DataReader(Command):
 			r=np.array(data_dict[origin]['reading'])
 			if len(t)==0:
 				self.logger.debug("{0} Zero length data for {1}".format(self,origin))
-			elif len(t) > 0 and (oldest_ts >=t[0] and (newest_hour <= 0 or newest_ts <= t[-1])): # we have all the data from file
+			elif oldest_ts >=t[0] and (newest_hour <= 0 or newest_ts <= t[-1]): # we have all the data from file
 				logging.getLogger(__name__).debug("{0} Get data latest (file)".format(self))
 				return(t[(t>=oldest_ts)*(t<=newest_ts)],r[(t>=oldest_ts)*(t<=newest_ts)])
 		# just return whatever we have
 		logging.getLogger(__name__).debug("{0} Get data (whatever we have)".format(self))
+		logging.getLogger(__name__).debug("XXX {0} {1}".format(t,r))
+		logging.getLogger(__name__).debug("XXX {0} {1}".format(t,r))
+		logging.getLogger(__name__).debug("YYY {0} {1}".format(oldest_ts,newest_ts))
+
 		return(t[(t>=oldest_ts)*(t<=newest_ts)],r[(t>=oldest_ts)*(t<=newest_ts)])
 		
 	# calculates list of possible cache files within a date range
@@ -347,7 +359,7 @@ class DataReader(Command):
 			tdates=self.dates
 			force=False
 		else: # force update of specific single origin and date
-			c_dt=dt.utcfromtimestamp(date_ts)
+			c_dt=dt.utcfromtimestamp(date_ts).replace(tzinfo=pytz.utc)
 			tfns={origin:[file_for_date(self.data_root,c_dt,origin)]}
 			tdates={origin:[date_ts]}
 			force=True
@@ -374,17 +386,18 @@ class DataReader(Command):
 								with portalocker.Lock(statfn,'w',timeout=5) as f:
 									json.dump(self.stats_cache[origin][d],f,indent=2)
 
+	# date_ts should be 00:00:00 (hh:mm:ss) of the current utc date
 	def CalculateStats(self,data,date_ts): 
 		ret={}
 		date=dt.utcfromtimestamp(date_ts).replace(tzinfo=pytz.utc)
 		ret['date']=dt.utcfromtimestamp(date_ts).replace(tzinfo=pytz.utc).date().isoformat()
 		tmin=date_ts
-		tmax=(date+timedelta(hours=24)).timestamp()
+		tmax=(date+timedelta(hours=24)).replace(tzinfo=pytz.utc).timestamp()
 		ret['daily']=self.descriptiveStats(data,tmin,tmax)
 		ret['hourly']={}
 		for h in range(24):
-			tmin=(date+timedelta(hours=h)).timestamp()
-			tmax=(date+timedelta(hours=h+1)).timestamp()
+			tmin=(date+timedelta(hours=h)).replace(tzinfo=pytz.utc).timestamp()
+			tmax=(date+timedelta(hours=h+1)).replace(tzinfo=pytz.utc).timestamp()
 			ret['hourly'][str(h)]=self.descriptiveStats(data,tmin,tmax)
 			if len(ret['hourly'][str(h)])==0: # no data to compute in this time window
 				del ret['hourly'][str(h)]

@@ -11,7 +11,6 @@ autopool.app.start_logging(level=logging.DEBUG,filename='testlog.txt')
 url='http://localhost:8050/sensors'
 
 origin_hourly = 'precip_inphr'
-origin_daily = 'precip_inpday'
 
 # happy-case test
 def logSomeData():

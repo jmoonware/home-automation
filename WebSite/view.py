@@ -395,6 +395,15 @@ def SetupView(controller,dr):
 	)
 
 
+	lo.append(
+		dbc.Row(
+			dbc.Col(
+				dcc.Interval(interval=vc.theDailyPrecipInterval.interval,id=vc.theDailyPrecipInterval.id,n_intervals=0)
+			)
+		)
+	)
+
+
 	
 	
 	#	lo.append(html.Div(id=vc.theLocalData.id,children=df.to_json(orient='split'),style={'display': 'none'}))
