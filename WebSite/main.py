@@ -2,7 +2,6 @@
 import control
 import data
 import view
-import data
 import rest
 
 # entry point

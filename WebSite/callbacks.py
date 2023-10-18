@@ -116,11 +116,12 @@ def SetupCallbacks(app):
 		except Exception as ex:
 			pass
 
+		for ifs, fs in enumerate(forecast_strings):
+			data.theDataReader.ephemera['Forecast{0}'.format(ifs)]=fs
+
 		if len(forecast_strings) > 1:
 			forecast_string = forecast_strings[0]
 			forecast_string_1 = forecast_strings[1]
-			data.theDataReader.ephemera['Forecast0']=forecast_string
-			data.theDataReader.ephemera['Forecast1']=forecast_string_1
 
 		return forecast_string, forecast_string_1
 
