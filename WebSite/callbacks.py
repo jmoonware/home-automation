@@ -10,12 +10,234 @@ import view # the 'layout' in dash
 import json
 import plotly.graph_objects as go
 import numpy as np
-from datetime import date
+from datetime import date, timedelta
 from datetime import datetime as dt
 import pytz
 import numpy as np
 import requests
 import time
+
+last_update = 0
+
+# populates all ephemera dicts
+def update_all():
+	global last_update
+	update_wind_gauge_stats(None)
+	update_gauges(None)
+
+	if dt.now().timestamp() - last_update > 4*3600:
+		update_forecast(None)
+		update_dailyprecip(None)
+		last_update = dt.now().timestamp()
+
+def update_wind_gauge_stats(*args):
+	
+	# VMPH Stats
+	# last minute
+	vmph_1m='N/A'
+	t,r = data.theDataReader.GetCacheData('wind_vmph',oldest_hour=1./60)
+	if len(r) > 0:
+		vmph_1m="{0:.1f}".format(np.mean(r))
+
+	data.theDataReader.ephemera['vmph_1m']=vmph_1m
+
+	# last 24 hrs
+	vmph_max='N/A'
+	nicedt_vmph_max='N/A'
+	t,s = data.theDataReader.GetCacheStats('wind_vmph',oldest_hour=24)
+	if len(s) > 0 and len(s['max']) > 0:
+		max_idx=np.argmax(s['max'])
+		vmph_tmax=s['maxtime'][max_idx]
+		nicedt_vmph_max='  '+'-'.join(dt.utcfromtimestamp(vmph_tmax).replace(tzinfo=pytz.UTC).astimezone(tz=pytz.timezone('US/Pacific')).isoformat(' ','minutes').split('-')[1:3])
+		vmph_max="{0:.1f}".format(np.mean(s['max']))
+
+	data.theDataReader.ephemera['nicedt_vmph_max_24hr']=nicedt_vmph_max
+	data.theDataReader.ephemera['vmph_max_24hr']=vmph_max
+	
+	# all-time record (10 years)
+	vmph_max_record='N/A'
+	nicedt_vmph_record='N/A'
+	t,s = data.theDataReader.GetCacheStats('wind_vmph',oldest_hour=24*3650,hourly=False)
+	if len(s) > 0 and len(s['max']) > 0:
+		max_idx=np.argmax(s['max'])
+		vmph_tmax=s['maxtime'][max_idx]
+		nicedt_vmph_record='  '+'-'.join(dt.utcfromtimestamp(vmph_tmax).replace(tzinfo=pytz.UTC).astimezone(tz=pytz.timezone('US/Pacific')).isoformat(' ','minutes').split('-')[0:3])
+		vmph_max_record="{0:.1f}".format(np.max(s['max']))
+
+
+	data.theDataReader.ephemera['nicedt_vmph_record']=nicedt_vmph_record
+	data.theDataReader.ephemera['vmph_max_record']=vmph_max_record
+
+	# wind angle
+	
+	sector_text=['N','NE','E','SE','S','SW','W','NW','N']
+	sector_start=np.array([0,45,90,135,180,225,270,315,360])
+	
+	dir_med_1m='N/A'
+	deg_med_1m=0
+	t,r = data.theDataReader.GetCacheData('wind_angle',oldest_hour=1./60)
+	if len(r) > 0:	
+		deg_med_1m=np.mean(r)
+		dir_med_1m='{0} ({1:.1f})'.format(sector_text[np.argmin(abs(sector_start-deg_med_1m))],deg_med_1m)
+
+	data.theDataReader.ephemera['deg_med_1m']=deg_med_1m
+	data.theDataReader.ephemera['dir_med_1m']=dir_med_1m
+
+	t,s = data.theDataReader.GetCacheStats('wind_angle',oldest_hour=24)
+	dir_med_24='N/A'
+	deg_med_24=0
+	if len(s) > 0 and len(s['p50']) > 0:
+		deg_med_24=np.median(s['p50'])
+		dir_med_24='{0} ({1:.1f})'.format(sector_text[np.argmin(abs(sector_start-deg_med_24))],deg_med_24)
+
+	data.theDataReader.ephemera['deg_med_24hr']=deg_med_24
+	data.theDataReader.ephemera['dir_med_24hr']=dir_med_24
+
+
+	# update logged data origins
+	options=[{'label':v,'value':v} for v in data.theDataReader.data_cache.keys()]
+
+
+	return options, vmph_1m,vmph_max,nicedt_vmph_max,vmph_max_record,nicedt_vmph_record,dir_med_1m,dir_med_24
+
+def update_forecast(*args):
+	forecast_string = 'None'
+	forecast_string_1 = 'None'
+	
+	# Get the forecast string from National Weather Service
+	forecast_url = r'https://forecast.weather.gov/MapClick.php?lon=-117.16695785522462&lat=33.04002531855252'
+	r = None
+	forecast_strings = []
+	try:
+		with requests.Session() as req:
+			r = req.get(forecast_url)
+		if r:
+			lines=r.text.split('\n')
+			for l,nl in zip(lines[:-1],lines[1:]):
+				if 'period-name' in l:
+					fs = nl.split('title=')[1].split('class')[0].strip().replace('"','')
+					if len(fs) > 0:
+						forecast_strings.append(fs)
+	except Exception as ex:
+		pass
+
+	for ifs, fs in enumerate(forecast_strings):
+		data.theDataReader.ephemera['Forecast{0}'.format(ifs)]=fs
+
+	if len(forecast_strings) > 1:
+		forecast_string = forecast_strings[0]
+		forecast_string_1 = forecast_strings[1]
+
+	return forecast_string, forecast_string_1
+
+def update_dailyprecip(*args):
+
+	precip_ytd_string = 'None'
+	
+	# Get the daily precip data and check to see if we have any updates
+
+	earliest_year = 2022
+	latest_year = dt.now().year
+
+	# this should load all the data we have
+	data_name = 'dailyprecip_in'
+	times, readings = data.theDataReader.GetTimestampUTCData(data_name,oldest_hour=24*366*(1+(latest_year-earliest_year)))
+	ts_latest_yr = dt(year=latest_year,month=1,day=1).astimezone(pytz.UTC).timestamp()
+	
+	if len(times)==0 or dt.now(pytz.utc).timestamp()-np.max(times) > 24*3600: 
+		dates=[]
+		daily_total_precip = []
+		precip_url = r'https://www.wrh.noaa.gov/sgx/obs/rtp/rtp_SGX_{0:02d}'
+		for yr in range(earliest_year,latest_year+1):
+			r = None
+			try:
+				with requests.Session() as req:
+					r = req.get(precip_url.format(yr-2000))
+				if r:
+					lines=r.text.split('\n')
+					for l in lines:
+						toks=l.split()
+						if len(toks) > 2:
+							dates.append(dt.strptime(toks[0],'%m/%d/%y').astimezone(pytz.UTC).timestamp())
+							try:
+								daily_total_precip.append(float(toks[-2].replace('T','0.001')))
+							except:
+								daily_total_precip.append(0.0)									
+			except Exception as ex:
+				pass
+
+		# if we don't have a record of the lasted downloaded readings, log them now
+		rebuild = False
+		for d, p in zip(dates,daily_total_precip):
+			if not d in times:
+				data.theDataWriter.LogData(data_name,p,timestamp=d)
+				rebuild = True
+		if rebuild:
+			time.sleep(5) # wait for some data logging to happen
+			data.theDataReader.RebuildCache()
+		
+		# use the ones we just downloaded
+		times = np.array(dates)
+		readings = np.array(daily_total_precip)
+
+	total_precip = np.sum(readings[times >= ts_latest_yr])
+
+	precip_ytd_string = "{0:.2f} in".format(total_precip)
+
+	data.theDataReader.ephemera['precipytd_in']=precip_ytd_string
+
+	return precip_ytd_string,
+
+def update_gauges(*args):
+	
+	current_temp = "{0:.1f}".format(np.random.rand()*60)
+	current_humidity = "{0:.1f}".format(np.random.rand()*100)
+	precip_1hr = "{0:.1f}".format(np.random.rand()*10)
+
+	newvals=data.theDataReader.GetLatestReadings()
+	if 'outside_T' in newvals:
+		current_temp="{0:.1f}".format((9*newvals['outside_T']['reading']/5.)+32)
+
+	if 'outside_H' in newvals:
+		current_humidity="{0:.1f}".format(newvals['outside_H']['reading'])
+
+	if 'precip_inphr' in newvals:
+		precip_1hr="{0:.1f}".format(newvals['precip_inphr']['reading'])
+
+	# last 24 hrs
+	max_temp='N/A'
+	min_temp='N/A'
+	t,s = data.theDataReader.GetCacheStats('outside_T',oldest_hour=24)
+	if len(s) > 0 and len(s['max']) > 0:
+		max_temp="{0:.1f}".format(9*np.max(s['max'])/5. + 32)
+	if len(s) > 0 and len(s['min']) > 0:
+		min_temp="{0:.1f}".format(9*np.min(s['min'])/5. + 32)
+
+	data.theDataReader.ephemera['min_temp_24hr']=min_temp
+	data.theDataReader.ephemera['max_temp_24hr']=max_temp
+
+	# last 24 hrs
+	max_humidity='N/A'
+	min_humidity='N/A'
+	t,s = data.theDataReader.GetCacheStats('outside_H',oldest_hour=24)
+	if len(s) > 0 and len(s['max']) > 0:
+		max_humidity="{0:.1f}".format(np.max(s['max']))
+	if len(s) > 0 and len(s['min']) > 0:
+		min_humidity="{0:.1f}".format(np.min(s['min']))
+
+	data.theDataReader.ephemera['min_humidity_24hr']=min_humidity
+	data.theDataReader.ephemera['max_humidity_24hr']=max_humidity
+
+	precip_24hr = 'N/A'
+	t,readings = data.theDataReader.GetCacheData('precip_inphr',oldest_hour=24)
+	if len(readings) > 0:
+		precip_24hr = "{0:.1f}".format(np.sum(readings))
+
+	data.theDataReader.ephemera['precip_24hr']=precip_24hr
+	
+	# precip_ytd = 'N/A'
+
+	return current_temp, max_temp, min_temp, current_humidity, max_humidity, min_humidity, precip_1hr, precip_24hr, # precip_ytd
 
 def SetupCallbacks(app):
 	""" params: dash app) """
@@ -33,60 +255,9 @@ def SetupCallbacks(app):
 		],
 		Input(component_id=vc.theStatsInterval.id, component_property=vc.theStatsInterval.n_intervals)
 	)
-	def update_wind_gauge_stats(*args):
-		
-		# VMPH Stats
-
-		# last minute
-		vmph_1m='N/A'
-		t,r = data.theDataReader.GetCacheData('wind_vmph',oldest_hour=1./60)
-		if len(r) > 0:
-			vmph_1m="{0:.1f}".format(np.mean(r))
-
-		# last 24 hrs
-		vmph_max='N/A'
-		nicedt_vmph_max='N/A'
-		t,s = data.theDataReader.GetCacheStats('wind_vmph',oldest_hour=24)
-		if len(s) > 0 and len(s['max']) > 0:
-			max_idx=np.argmax(s['max'])
-			vmph_tmax=s['maxtime'][max_idx]
-			nicedt_vmph_max='  '+'-'.join(dt.utcfromtimestamp(vmph_tmax).replace(tzinfo=pytz.UTC).astimezone(tz=pytz.timezone('US/Pacific')).isoformat(' ','minutes').split('-')[1:3])
-			vmph_max="{0:.1f}".format(np.mean(s['max']))
-
-		
-		# all-time record (10 years)
-		vmph_max_record='N/A'
-		nicedt_vmph_record='N/A'
-		t,s = data.theDataReader.GetCacheStats('wind_vmph',oldest_hour=24*3650,hourly=False)
-		if len(s) > 0 and len(s['max']) > 0:
-			max_idx=np.argmax(s['max'])
-			vmph_tmax=s['maxtime'][max_idx]
-			nicedt_vmph_record='  '+'-'.join(dt.utcfromtimestamp(vmph_tmax).replace(tzinfo=pytz.UTC).astimezone(tz=pytz.timezone('US/Pacific')).isoformat(' ','minutes').split('-')[0:3])
-			vmph_max_record="{0:.1f}".format(np.max(s['max']))
-			
-		# wind angle
-		
-		sector_text=['N','NE','E','SE','S','SW','W','NW','N']
-		sector_start=np.array([0,45,90,135,180,225,270,315,360])
-		
-		dir_med_1m='N/A'
-		t,r = data.theDataReader.GetCacheData('wind_angle',oldest_hour=1./60)
-		if len(r) > 0:	
-			deg_med_1m=np.mean(r)
-			dir_med_1m='{0} ({1:.1f})'.format(sector_text[np.argmin(abs(sector_start-deg_med_1m))],deg_med_1m)
-
-		t,s = data.theDataReader.GetCacheStats('wind_angle',oldest_hour=24)
-		dir_med_24='N/A'
-		if len(s) > 0 and len(s['p50']) > 0:
-			deg_med_24=np.median(s['p50'])
-			dir_med_24='{0} ({1:.1f})'.format(sector_text[np.argmin(abs(sector_start-deg_med_24))],deg_med_24)
-
-
-		# update logged data origins
-		options=[{'label':v,'value':v} for v in data.theDataReader.data_cache.keys()]
-
-
-		return options, vmph_1m,vmph_max,nicedt_vmph_max,vmph_max_record,nicedt_vmph_record,dir_med_1m,dir_med_24
+	def callback_update_wind_gauge_stats(*args):
+		return(update_wind_gauge_stats(args))
+	
 
 	@app.callback(
 		[
@@ -95,98 +266,18 @@ def SetupCallbacks(app):
 		],
 		Input(component_id=vc.theForecastInterval.id, component_property=vc.theForecastInterval.n_intervals)
 	)
-	def update_forecast(*args):
-		forecast_string = 'None'
-		forecast_string_1 = 'None'
-		
-		# Get the forecast string from National Weather Service
-		forecast_url = r'https://forecast.weather.gov/MapClick.php?lon=-117.16695785522462&lat=33.04002531855252'
-		r = None
-		forecast_strings = []
-		try:
-			with requests.Session() as req:
-				r = req.get(forecast_url)
-			if r:
-				lines=r.text.split('\n')
-				for l,nl in zip(lines[:-1],lines[1:]):
-					if 'period-name' in l:
-						fs = nl.split('title=')[1].split('class')[0].strip().replace('"','')
-						if len(fs) > 0:
-							forecast_strings.append(fs)
-		except Exception as ex:
-			pass
-
-		for ifs, fs in enumerate(forecast_strings):
-			data.theDataReader.ephemera['Forecast{0}'.format(ifs)]=fs
-
-		if len(forecast_strings) > 1:
-			forecast_string = forecast_strings[0]
-			forecast_string_1 = forecast_strings[1]
-
-		return forecast_string, forecast_string_1
-
+	def callback_update_forecast(*args):
+		return(update_forecast(args))
+	
 	@app.callback(
 		[
 			Output(component_id='precip-ytd', component_property='children'),
 		],
 		Input(component_id=vc.theDailyPrecipInterval.id, component_property=vc.theDailyPrecipInterval.n_intervals)
 	)
-	def update_dailyprecip(*args):
-
-		precip_ytd_string = 'None'
-		
-		print("*** BLARG")
-		# Get the daily precip data and check to see if we have any updates
-
-		earliest_year = 2022
-		latest_year = dt.now().year
-
-		# this should load all the data we have
-		data_name = 'dailyprecip_in'
-		times, readings = data.theDataReader.GetTimestampUTCData(data_name,oldest_hour=24*366*(1+(latest_year-earliest_year)))
-		ts_latest_yr = dt(year=latest_year,month=1,day=1).astimezone(pytz.UTC).timestamp()
-		
-		if len(times)==0 or dt.now(pytz.utc).timestamp()-np.max(times) > 24*3600: 
-			dates=[]
-			daily_total_precip = []
-			precip_url = r'https://www.wrh.noaa.gov/sgx/obs/rtp/rtp_SGX_{0:02d}'
-			for yr in range(earliest_year,latest_year+1):
-				r = None
-				try:
-					with requests.Session() as req:
-						r = req.get(precip_url.format(yr-2000))
-					if r:
-						lines=r.text.split('\n')
-						for l in lines:
-							toks=l.split()
-							if len(toks) > 2:
-								dates.append(dt.strptime(toks[0],'%m/%d/%y').astimezone(pytz.UTC).timestamp())
-								try:
-									daily_total_precip.append(float(toks[-2].replace('T','0.001')))
-								except:
-									daily_total_precip.append(0.0)									
-				except Exception as ex:
-					pass
-
-			# if we don't have a record of the lasted downloaded readings, log them now
-			rebuild = False
-			for d, p in zip(dates,daily_total_precip):
-				if not d in times:
-					data.theDataWriter.LogData(data_name,p,timestamp=d)
-					rebuild = True
-			if rebuild:
-				time.sleep(5) # wait for some data logging to happen
-				data.theDataReader.RebuildCache()
-			
-			# use the ones we just downloaded
-			times = np.array(dates)
-			readings = np.array(daily_total_precip)
-
-		total_precip = np.sum(readings[times >= ts_latest_yr])
-
-		precip_ytd_string = "{0:.2f} in".format(total_precip)
-
-		return precip_ytd_string,
+	def callback_update_dailyprecip(*args):
+		return update_dailyprecip(args)
+	
 
 
 	@app.callback(
@@ -203,50 +294,10 @@ def SetupCallbacks(app):
 		],
 		Input(component_id=vc.theInterval.id, component_property=vc.theInterval.n_intervals)
 	)
-	def update_gauges(*args):
-		
-		current_temp = "{0:.1f}".format(np.random.rand()*60)
-		current_humidity = "{0:.1f}".format(np.random.rand()*100)
-		precip_1hr = "{0:.1f}".format(np.random.rand()*10)
-
-		newvals=data.theDataReader.GetLatestReadings()
-		if 'outside_T' in newvals:
-			current_temp="{0:.1f}".format((9*newvals['outside_T']['reading']/5.)+32)
-
-		if 'outside_H' in newvals:
-			current_humidity="{0:.1f}".format(newvals['outside_H']['reading'])
-
-		if 'precip_inphr' in newvals:
-			precip_1hr="{0:.1f}".format(newvals['precip_inphr']['reading'])
-
-		# last 24 hrs
-		max_temp='N/A'
-		min_temp='N/A'
-		t,s = data.theDataReader.GetCacheStats('outside_T',oldest_hour=24)
-		if len(s) > 0 and len(s['max']) > 0:
-			max_temp="{0:.1f}".format(9*np.max(s['max'])/5. + 32)
-		if len(s) > 0 and len(s['min']) > 0:
-			min_temp="{0:.1f}".format(9*np.min(s['min'])/5. + 32)
-
-		# last 24 hrs
-		max_humidity='N/A'
-		min_humidity='N/A'
-		t,s = data.theDataReader.GetCacheStats('outside_H',oldest_hour=24)
-		if len(s) > 0 and len(s['max']) > 0:
-			max_humidity="{0:.1f}".format(np.max(s['max']))
-		if len(s) > 0 and len(s['min']) > 0:
-			min_humidity="{0:.1f}".format(np.min(s['min']))
-
-
-		precip_24hr = 'N/A'
-		t,readings = data.theDataReader.GetCacheData('precip_inphr',oldest_hour=24)
-		if len(readings) > 0:
-			precip_24hr = "{0:.1f}".format(np.sum(readings))
-		# precip_ytd = 'N/A'
-
+	def callback_update_gauges(*args):
+		return update_gauges(args)
 	
 
-		return current_temp, max_temp, min_temp, current_humidity, max_humidity, min_humidity, precip_1hr, precip_24hr, # precip_ytd
 
 	@app.callback(
 		[
@@ -414,6 +465,7 @@ def SetupCallbacks(app):
 		timespan=args[1]
 		
 		now=date.today()
+		now_dt=dt.now(pytz.utc)
 		
 		print((granularity, timespan))
 		
@@ -447,12 +499,19 @@ def SetupCallbacks(app):
 		the_stats=[]
 		the_labels=[]
 		print(granularity,hours)
+		newest_hour=0
+		oldest_hour=hours
+		if utc_start_datetime:
+			oldest_hour = (now_dt - utc_start_datetime).total_seconds()/3600
+			newest_hour = oldest_hour - hours
+			# the right-most values in graph
+			utc_start_datetime = utc_start_datetime + timedelta(hours=hours)
 		
 		for ycol in ycols:
 			times=[]
 			readings=[]
 			if granularity=='points':
-				times,readings = data.theDataReader.GetCacheData(ycol,oldest_hour=hours) # TODO - Add drop down, time boxes
+				times,readings = data.theDataReader.GetCacheData(ycol,newest_hour=newest_hour,oldest_hour=oldest_hour) # TODO - Add drop down, time boxes
 			elif granularity=='hourly':
 				# start_time_utc=None,newest_hour=0,oldest_hour=24,hourly=True
 				times,rd = data.theDataReader.GetCacheStats(ycol,start_time_utc=utc_start_datetime,oldest_hour=hours,hourly=True)
@@ -512,7 +571,6 @@ def SetupCallbacks(app):
 		[State("collapse", "is_open")],
 	)
 	def toggle_collapse(n, is_open):
-		print('gah '+str(n))
 		if n:
 			return not is_open
 		return is_open

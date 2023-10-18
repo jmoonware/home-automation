@@ -2,6 +2,7 @@
 from flask import Flask, request, jsonify
 import data
 import logging
+import callbacks
 
 once = False
 def SetupRest(app):
@@ -25,10 +26,13 @@ def SetupRest(app):
 					logging.getLogger(__name__).debug("REST unhandled {0}".format(sensor_id,ex))
 			return new_reading
 		
-		
-		# SensorList endpoint
 		# shows a list of all sensor data
 		@app.route('/sensors',methods=['GET'])
-		def get_latest():
+		def get_latest_sensors():
+			return jsonify(data.theDataReader.GetLatestReadings())
+		 
+		# shows a list of all sensor data
+		@app.route('/micro',methods=['GET'])
+		def get_latest_all():
+			callbacks.update_all()
 			return jsonify(data.theDataReader.GetLatestReadings() | data.theDataReader.ephemera)
-		
