@@ -34,7 +34,7 @@ class LogWebCommand(Command):
 				if sr and len(sr.groups())==2:
 					self.logger.debug("*** " + sr.groups()[0] + sr.groups()[1])
 					log_hour=int(sr.groups()[0])
-					if sr.groups()[1]=='PM':
+					if sr.groups()[1]=='PM' and log_hour < 12:
 						log_hour+=12
 					# local_now in same time zone as forecast
 					# todo: adjust for possible different time zones
