@@ -49,7 +49,7 @@ def update_wind_gauge_stats(*args):
 		max_idx=np.argmax(s['max'])
 		vmph_tmax=s['maxtime'][max_idx]
 		nicedt_vmph_max='  '+'-'.join(dt.utcfromtimestamp(vmph_tmax).replace(tzinfo=pytz.UTC).astimezone(tz=pytz.timezone('US/Pacific')).isoformat(' ','minutes').split('-')[1:3])
-		vmph_max="{0:.1f}".format(np.mean(s['max']))
+		vmph_max="{0:.1f}".format(np.max(s['max']))
 
 	data.theDataReader.ephemera['nicedt_vmph_max_24hr']=nicedt_vmph_max
 	data.theDataReader.ephemera['vmph_max_24hr']=vmph_max
