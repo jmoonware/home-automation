@@ -231,7 +231,7 @@ def update_gauges(*args):
 	precip_24hr = 'N/A'
 	t,readings = data.theDataReader.GetCacheData('precip_inphr',oldest_hour=24)
 	if len(readings) > 0:
-		precip_24hr = "{0:.1f}".format(np.sum(readings))
+		precip_24hr = "{0:.2f}".format(np.sum(readings))
 
 	data.theDataReader.ephemera['precip_24hr']=precip_24hr
 	
