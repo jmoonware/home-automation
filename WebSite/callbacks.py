@@ -233,9 +233,12 @@ def update_gauges(*args):
 	data.theDataReader.ephemera['max_humidity_24hr']=max_humidity
 
 	precip_24hr = 'N/A'
-	t,readings = data.theDataReader.GetCacheData('precip_inphr',oldest_hour=24)
+	t,readings = data.theDataReader.GetTimestampUTCData('precip_inphr',oldest_hour=24)
 	if len(readings) > 0:
-		precip_24hr = "{0:.2f}".format(np.sum(readings))
+		max_readings=[]
+		for tv in np.unique(t):
+			max_readings.append(np.max(readings[t==tv]))
+		precip_24hr = "{0:.2f}".format(np.sum(max_readings))
 
 	data.theDataReader.ephemera['precip_24hr']=precip_24hr
 	

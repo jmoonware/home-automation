@@ -4,7 +4,7 @@ data.StartDataLogging()
 
 from DataLogger import DataReader
 
-dr=DataReader(settings={'data_root':'dataFeb19'})
+dr=DataReader(settings={'data_root':'/opt/WebSite'})
 
 dr.RebuildCache()
 
