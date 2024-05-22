@@ -113,11 +113,15 @@ def update_forecast(*args):
 			r = req.get(forecast_url)
 		if r:
 			lines=r.text.split('\n')
-			for l,nl in zip(lines[:-1],lines[1:]):
-				if 'period-name' in l:
-					fs = nl.split('title=')[1].split('class')[0].strip().replace('"','')
-					if len(fs) > 0:
-						forecast_strings.append(fs)
+			fc = [l for l in lines if 'period-name' in l]
+			if len(fc) == 1:
+				forecast_strings = [l.split('title=')[0].replace('"','').strip  () for l in fc[0].split('alt=')[1:]]
+			else: # old format
+				for l,nl in zip(lines[:-1],lines[1:]):
+					if 'period-name' in l:
+						fs = nl.split('title=')[1].split('class')[0].strip().replace('"','')
+						if len(fs) > 0:
+							forecast_strings.append(fs)
 	except Exception as ex:
 		pass
 
