@@ -16,6 +16,7 @@ import pytz
 import numpy as np
 import requests
 import time
+import settings
 
 last_update = 0
 
@@ -105,7 +106,7 @@ def update_forecast(*args):
 	forecast_string_1 = 'None'
 	
 	# Get the forecast string from National Weather Service
-	forecast_url = r'https://forecast.weather.gov/MapClick.php?lon=-117.16695785522462&lat=33.04002531855252'
+	forecast_url = settings.forecast_url
 	r = None
 	forecast_strings = []
 	try:
@@ -116,6 +117,8 @@ def update_forecast(*args):
 			fc = [l for l in lines if 'period-name' in l]
 			if len(fc) == 1:
 				forecast_strings = [l.split('title=')[0].replace('"','').strip  () for l in fc[0].split('alt=')[1:]]
+			elif len(fc) == 2:
+				forecast_strings = [l.split('title=')[0].replace('"','').strip  () for l in fc[1].split('alt=')[1:]]
 			else: # old format
 				for l,nl in zip(lines[:-1],lines[1:]):
 					if 'period-name' in l:
@@ -125,6 +128,8 @@ def update_forecast(*args):
 	except Exception as ex:
 		pass
 
+	t = [f for f in forecast_strings if f!=None and len(f) > 0]
+	forecast_strings = t
 	for ifs, fs in enumerate(forecast_strings):
 		data.theDataReader.ephemera['Forecast{0}'.format(ifs)]=fs
 
@@ -151,7 +156,7 @@ def update_dailyprecip(*args):
 	if len(times)==0 or dt.now(pytz.utc).timestamp()-np.max(times) > 24*3600: 
 		dates=[]
 		daily_total_precip = []
-		precip_url = r'https://www.wrh.noaa.gov/sgx/obs/rtp/rtp_SGX_{0:02d}'
+		precip_url = settings.precip_url
 		for yr in range(earliest_year,latest_year+1):
 			r = None
 			try:

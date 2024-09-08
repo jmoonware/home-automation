@@ -1,11 +1,12 @@
 import requests
+import settings
 
 def update_forecast():
     forecast_string = 'None'
     forecast_string_1 = 'None'
 
     # Get the forecast string from National Weather Service
-    forecast_url = r'https://forecast.weather.gov/MapClick.php?lon=-117.16695785522462&lat=33.04002531855252'
+    forecast_url = settings.forecast_url
     r = None
     forecast_strings = []
     hazard_strings = []
@@ -15,8 +16,11 @@ def update_forecast():
         if r:
             lines=r.text.split('\n')
             fc = [l for l in lines if 'period-name' in l]
+#            breakpoint()
             if len(fc) == 1:
                 forecast_strings = [l.split('title=')[0].replace('"','').strip() for l in fc[0].split('alt=')[1:]]
+            elif len(fc) == 2:
+                forecast_strings = [l.split('title=')[0].replace('"','').strip() for l in fc[1].split('alt=')[1:]]
             else: # old format
                 for l,nl in zip(lines[:-1],lines[1:]):
                     if 'period-name' in l:

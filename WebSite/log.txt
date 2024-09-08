@@ -666,3 +666,10 @@
 2022-02-10 13:35:27,082	DEBUG	Writing 1 data pairs to datac\2022\2\10\wind_angle.dat
 2022-02-10 13:35:45,376	DEBUG	Writing 1 data pairs to datac\2022\2\10\wind_angle.dat
 2022-02-10 13:35:47,459	DEBUG	Writing 1 data pairs to datac\2022\2\10\wind_angle.dat
+2024-09-08 15:46:24,929	CRITICAL	Logging Started, level=10
+2024-09-08 15:46:44,911	DEBUG	Starting new HTTPS connection (1): www.weather.gov:443
+2024-09-08 15:46:45,090	DEBUG	https://www.weather.gov:443 "GET /source/sgx/hydro/LAXRRMSAN HTTP/1.1" 200 2429
+2024-09-08 15:46:45,094	DEBUG	*** 3PM
+2024-09-08 15:46:45,094	DEBUG	RNBC1=RANCHO BERNARDO=690=0.0
+2024-09-08 15:46:45,095	DEBUG	One hour precip=0.0 in/hr for RNBC1
+2024-09-08 15:46:45,095	DEBUG	No readings - log 1725832800.0,0.0
