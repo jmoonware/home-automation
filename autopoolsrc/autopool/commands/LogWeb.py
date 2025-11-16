@@ -16,7 +16,7 @@ class LogWebCommand(Command):
 	def Init(self):
 		self.blocking=False
 		self.loop_count=-1
-		self.loop_interval=30
+		self.loop_interval=600
 		self.hourly_precip_url='https://www.weather.gov/source/sgx/hydro/LAXRRMSAN'
 		self.station='RNBC1' # Rancho Bernardo
 		self.tpat='PERIODS ENDING AT[ ]+([0-9]+)[ ]+([AP]M)'
@@ -34,7 +34,9 @@ class LogWebCommand(Command):
 				if sr and len(sr.groups())==2:
 					self.logger.debug("*** " + sr.groups()[0] + sr.groups()[1])
 					log_hour=int(sr.groups()[0])
-					if sr.groups()[1]=='PM':
+					if log_hour==12 and sr.groups()[1]=='PM':
+						log_hour=0
+					if sr.groups()[1]=='PM' and log_hour < 12:
 						log_hour+=12
 					# local_now in same time zone as forecast
 					# todo: adjust for possible different time zones
@@ -57,7 +59,7 @@ class LogWebCommand(Command):
 			self.logger.debug("No readings - log {0},{1}".format(utc_log_timestamp,precip_1hr))
 			self.data_logger.LogData(origin_hourly,precip_1hr,timestamp=utc_log_timestamp)
 			# KLUDGE: wait for data_logger to get data on disk
-			time.sleep(3*self.data_logger.loop_interval)
+			time.sleep(5)
 			self.data_reader.RebuildCache()	
 		elif 'time' in reading[origin_hourly] and utc_log_timestamp > reading[origin_hourly]['time']:
 			self.logger.debug("New hourly value - log {0},{1} (latest logged timestamp {2})".format(utc_log_timestamp,precip_1hr,reading[origin_hourly]['time']))

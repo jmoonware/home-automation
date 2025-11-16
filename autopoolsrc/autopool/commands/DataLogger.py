@@ -374,7 +374,8 @@ class DataReader(Command):
 							self.stats_cache[origin][d]=json.load(f)
 					else: # need to recalculate
 						tdat={'time':[],'reading':[]}
-						if os.path.isfile(fn): 
+						if os.path.isfile(fn):
+							logging.getLogger(__name__).debug("UpdateStats: {0}".format(fn))
 							with portalocker.Lock(fn,'r',timeout=5) as f:
 								lines=f.readlines()
 							tdat['time']=[float(l.split(data_sep)[0]) for l in lines]

@@ -8,6 +8,7 @@ autopool.egg-info/requires.txt
 autopool.egg-info/top_level.txt
 autopool/commands/DataLogger.py
 autopool/commands/Level.py
+autopool/commands/LogWeb.py
 autopool/commands/Pump.py
 autopool/commands/Relays.py
 autopool/commands/Thermal.py

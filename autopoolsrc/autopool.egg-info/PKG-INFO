@@ -10,7 +10,6 @@ Classifier: License :: OSI Approved :: GNU Affero GPL
 Classifier: Programming Language :: Python
 Classifier: Programming Language :: Python :: 3
 Classifier: Programming Language :: Python :: 3.7
-Requires-Python: >3.9
-Requires-Dist: numpy
+Requires-Python: >3.7
 
 Automation for a Pentair pool pump and other devices for RPi
