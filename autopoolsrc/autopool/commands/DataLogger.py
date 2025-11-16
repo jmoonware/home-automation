@@ -206,7 +206,8 @@ class DataReader(Command):
 							self.today_filesize[origin]=tsize # this is now the latest file size we have read
 						with self.data_sync:
 							# this appends the new lines another process wrote
-							self.ParseLines(newlines,self.data_cache[origin]['time'],self.data_cache[origin]['reading'])	
+							if len(self.ParseLines(newlines,self.data_cache[origin]['time'],self.data_cache[origin]['reading'])) > 0:
+								logging.getLogger(__name__).debug("ParseLine errors for file {0}".format(data_path))
 				else: # have a file, but no previous read	
 					with self.file_size_sync:				
 						self.today_filesize[origin]=0
@@ -335,9 +336,8 @@ class DataReader(Command):
 				return(t[(t>=oldest_ts)*(t<=newest_ts)],r[(t>=oldest_ts)*(t<=newest_ts)])
 		# just return whatever we have
 		logging.getLogger(__name__).debug("{0} Get data (whatever we have)".format(self))
-		logging.getLogger(__name__).debug("XXX {0} {1}".format(t,r))
-		logging.getLogger(__name__).debug("XXX {0} {1}".format(t,r))
-		logging.getLogger(__name__).debug("YYY {0} {1}".format(oldest_ts,newest_ts))
+		logging.getLogger(__name__).debug("XXX t {0} r {1}".format(t,r))
+		logging.getLogger(__name__).debug("YYY oldest {0} newest {1}".format(oldest_ts,newest_ts))
 
 		return(t[(t>=oldest_ts)*(t<=newest_ts)],r[(t>=oldest_ts)*(t<=newest_ts)])
 		
@@ -379,13 +379,15 @@ class DataReader(Command):
 							logging.getLogger(__name__).debug("UpdateStats: {0}".format(fn))
 							with portalocker.Lock(fn,'r',timeout=5) as f:
 								lines=f.readlines()
-							try:
-								for l in lines:
+							for l in lines:
+								try:
 									lineno+=1
-									tdat['time'].append(float(l.split(data_sep)[0]))
-									tdat['reading'].append(float(l.strip().split(data_sep)[1]))
-							except ValueError as ve:
-								logging.getLogger(__name__).debug("Update stats - line parse error in {0} at line {1}".format(fn,lineno))
+									ttime = float(l.split(data_sep)[0])
+									tread = float(l.split(data_sep)[1])
+									tdat['time'].append(ttime)
+									tdat['reading'].append(tread)
+								except ValueError as ve:
+									logging.getLogger(__name__).debug("Update stats - line parse error in {0} at line {1}".format(fn,lineno))
 							self.stats_cache[origin][d]=self.CalculateStats(tdat,d)
 							if len(self.stats_cache[origin][d]['daily'])==0: # don't write empty stats
 								del self.stats_cache[origin][d]
@@ -451,16 +453,24 @@ class DataReader(Command):
 							self.today_filesize[origin]=sz
 					if not origin in data_dict:
 						data_dict[origin]={'time':[],'reading':[]}
-					self.ParseLines(lines,data_dict[origin]['time'],data_dict[origin]['reading'])
+					if len(self.ParseLines(lines,data_dict[origin]['time'],data_dict[origin]['reading'])) > 0:
+						logging.getLogger(__name__).debug("ParseLine errors in file {0}".format(fn))
 		return data_dict
 		
 	def ParseLines(self,lines,time_list,reading_list):
-		for l in lines:
+		errline=[] # line numbers of errors
+		for lineno,l in enumerate(lines):
 			vals = l.decode('utf-8').strip().split(data_sep)
 			if len(vals)==2:
-				time_list.append(float(vals[0]))
-				reading_list.append(float(vals[1]))
-		return
+				try:
+					ttime = float(vals[0]) # in case we have an exception on one of the vals
+					tread = float(vals[1])
+					time_list.append(ttime)
+					reading_list.append(tread)
+				except ValueError as ve:
+					logging.getLogger(__name__).debug("DataReader ParseLines: bad float value at line {0}".format(lineno))
+					errline.append(lineno)
+		return errline
 		
 	def UpdateAvailableDatFiles(self,single_origin=None):
 		# get all the availalalbe .dat origins, will filter below
