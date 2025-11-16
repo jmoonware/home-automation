@@ -16,6 +16,7 @@ import pytz
 import numpy as np
 import requests
 import time
+import settings
 
 last_update = 0
 
@@ -49,7 +50,7 @@ def update_wind_gauge_stats(*args):
 		max_idx=np.argmax(s['max'])
 		vmph_tmax=s['maxtime'][max_idx]
 		nicedt_vmph_max='  '+'-'.join(dt.utcfromtimestamp(vmph_tmax).replace(tzinfo=pytz.UTC).astimezone(tz=pytz.timezone('US/Pacific')).isoformat(' ','minutes').split('-')[1:3])
-		vmph_max="{0:.1f}".format(np.mean(s['max']))
+		vmph_max="{0:.1f}".format(np.max(s['max']))
 
 	data.theDataReader.ephemera['nicedt_vmph_max_24hr']=nicedt_vmph_max
 	data.theDataReader.ephemera['vmph_max_24hr']=vmph_max
@@ -105,7 +106,7 @@ def update_forecast(*args):
 	forecast_string_1 = 'None'
 	
 	# Get the forecast string from National Weather Service
-	forecast_url = r'https://forecast.weather.gov/MapClick.php?lon=-117.16695785522462&lat=33.04002531855252'
+	forecast_url = settings.forecast_url
 	r = None
 	forecast_strings = []
 	try:
@@ -113,14 +114,22 @@ def update_forecast(*args):
 			r = req.get(forecast_url)
 		if r:
 			lines=r.text.split('\n')
-			for l,nl in zip(lines[:-1],lines[1:]):
-				if 'period-name' in l:
-					fs = nl.split('title=')[1].split('class')[0].strip().replace('"','')
-					if len(fs) > 0:
-						forecast_strings.append(fs)
+			fc = [l for l in lines if 'period-name' in l]
+			if len(fc) == 1:
+				forecast_strings = [l.split('title=')[0].replace('"','').strip  () for l in fc[0].split('alt=')[1:]]
+			elif len(fc) == 2:
+				forecast_strings = [l.split('title=')[0].replace('"','').strip  () for l in fc[1].split('alt=')[1:]]
+			else: # old format
+				for l,nl in zip(lines[:-1],lines[1:]):
+					if 'period-name' in l:
+						fs = nl.split('title=')[1].split('class')[0].strip().replace('"','')
+						if len(fs) > 0:
+							forecast_strings.append(fs)
 	except Exception as ex:
 		pass
 
+	t = [f for f in forecast_strings if f!=None and len(f) > 0]
+	forecast_strings = t
 	for ifs, fs in enumerate(forecast_strings):
 		data.theDataReader.ephemera['Forecast{0}'.format(ifs)]=fs
 
@@ -147,7 +156,7 @@ def update_dailyprecip(*args):
 	if len(times)==0 or dt.now(pytz.utc).timestamp()-np.max(times) > 24*3600: 
 		dates=[]
 		daily_total_precip = []
-		precip_url = r'https://www.wrh.noaa.gov/sgx/obs/rtp/rtp_SGX_{0:02d}'
+		precip_url = settings.precip_url
 		for yr in range(earliest_year,latest_year+1):
 			r = None
 			try:
@@ -229,9 +238,12 @@ def update_gauges(*args):
 	data.theDataReader.ephemera['max_humidity_24hr']=max_humidity
 
 	precip_24hr = 'N/A'
-	t,readings = data.theDataReader.GetCacheData('precip_inphr',oldest_hour=24)
+	t,readings = data.theDataReader.GetTimestampUTCData('precip_inphr',oldest_hour=24)
 	if len(readings) > 0:
-		precip_24hr = "{0:.1f}".format(np.sum(readings))
+		max_readings=[]
+		for tv in np.unique(t):
+			max_readings.append(np.max(readings[t==tv]))
+		precip_24hr = "{0:.2f}".format(np.sum(max_readings))
 
 	data.theDataReader.ephemera['precip_24hr']=precip_24hr
 	
