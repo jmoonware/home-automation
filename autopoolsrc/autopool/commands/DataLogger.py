@@ -374,12 +374,18 @@ class DataReader(Command):
 							self.stats_cache[origin][d]=json.load(f)
 					else: # need to recalculate
 						tdat={'time':[],'reading':[]}
+						lineno=-1
 						if os.path.isfile(fn):
 							logging.getLogger(__name__).debug("UpdateStats: {0}".format(fn))
 							with portalocker.Lock(fn,'r',timeout=5) as f:
 								lines=f.readlines()
-							tdat['time']=[float(l.split(data_sep)[0]) for l in lines]
-							tdat['reading']=[float(l.strip().split(data_sep)[1]) for l in lines]
+							try:
+								for l in lines:
+									lineno+=1
+									tdat['time'].append(float(l.split(data_sep)[0]))
+									tdat['reading'].append(float(l.strip().split(data_sep)[1]))
+							except ValueError as ve:
+								logging.getLogger(__name__).debug("Update stats - line parse error in {0} at line {1}".format(fn,lineno))
 							self.stats_cache[origin][d]=self.CalculateStats(tdat,d)
 							if len(self.stats_cache[origin][d]['daily'])==0: # don't write empty stats
 								del self.stats_cache[origin][d]
